@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.swipemusic.radio",
+    "sha256_cert_fingerprints": ["D6:8F:83:A7:1C:8E:07:31:C0:B7:B7:79:A7:97:AA:9E:02:84:00:C2:95:8A:32:CE:9B:6D:46:14:2D:E8:BD:BE"]
+  }
+}]
