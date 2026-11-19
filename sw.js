@@ -1,5 +1,5 @@
 // Минимальный service worker: установка как приложение + оболочка без сети.
-const V = 'swipe-v2';
+const V = 'swipe-v3';
 const SHELL = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 const P = p => new URL(p, self.location).pathname;
 const SHELL_PATHS = SHELL.map(P);
@@ -21,7 +21,7 @@ self.addEventListener('fetch', e => {
   if (!nav && !SHELL_PATHS.includes(u.pathname)) return;
   const key = nav ? P('./') : u.pathname;
   e.respondWith(
-    fetch(r)
+    fetch(nav ? r.url : r, { cache: 'no-cache' })
       .then(res => {
         if (res.ok) { const cp = res.clone(); caches.open(V).then(c => c.put(key, cp)); }
         return res;
