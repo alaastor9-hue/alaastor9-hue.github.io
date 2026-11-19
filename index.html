@@ -60,6 +60,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--yes);outline-of
 .hi b{display:block;font-weight:600}
 .hi span{font-size:13px;color:var(--mute)}
 .hempty{color:var(--mute);padding:16px 0}
+.hfilt{display:flex;gap:8px;padding:10px 18px 0}
+.pill.on{border-color:var(--yes);color:var(--yes)}
 #count{position:fixed;top:calc(18px + var(--st));left:50%;transform:translateX(-50%);font-size:14px;color:var(--mute)}
 #reset,#menuBtn{position:fixed;top:calc(10px + var(--st));z-index:6;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:999px;font-weight:500;font-size:14px;padding:8px 18px}
 #reset{right:12px}#menuBtn{left:16px}
@@ -171,7 +173,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 <button id="reset" class="hide">Выйти</button>
 <div id="vol" class="hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg><input type="range" id="volR" min="0" max="100" aria-label="Громкость"></div>
 <div id="hist" class="hide" role="dialog" aria-modal="true" aria-labelledby="histT">
-  <div class="hbox"><div class="hhead"><h2 id="histT">История</h2><button id="histX" class="pill" aria-label="Закрыть">✕</button></div><div id="hlist"></div></div>
+  <div class="hbox"><div class="hhead"><h2 id="histT">История</h2><button id="histX" class="pill" aria-label="Закрыть">✕</button></div><div class="hfilt"><button id="hAll" class="pill on">Все</button><button id="hAdded" class="pill">Добавленные</button></div><div id="hlist"></div></div>
 </div>
 <div id="toast" role="status"></div>
 
@@ -218,8 +220,13 @@ async function getToken(){
   if(Date.now()>+LS('exp')) await tokenReq({grant_type:'refresh_token',refresh_token:LS('rt'),client_id:CID()});
   return LS('at');
 }
-async function api(path,o={}){
+async function api(path,o={},tries=0){
   const r=await fetch('https://api.spotify.com/v1'+path,{...o,headers:{Authorization:'Bearer '+await getToken(),'Content-Type':'application/json'}});
+  if(r.status===429&&tries<3){ /* лимит запросов: ждём и повторяем */
+    const w=Math.min(+r.headers.get('Retry-After')||2*(tries+1),15);
+    await new Promise(x=>setTimeout(x,w*1000+200));
+    return api(path,o,tries+1);
+  }
   if(!r.ok) throw new Error(r.status);
   return r.status===204?null:r.json();
 }
@@ -274,32 +281,41 @@ $('#go').onclick=async()=>{
 /* ---------- Библиотека, жанры, фильтры ---------- */
 /* ---------- Что уже есть в плейлистах ---------- */
 let PL=J('plc')||{t:0,names:[],ids:{},keys:{}};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function loadPlaylists(force){
-  if(!force&&Date.now()-PL.t<30*60e3) return;
+  if(!force&&Date.now()-PL.t<(PL.partial?10*60e3:6*3600e3)) return;
   const n={t:Date.now(),names:[],ids:{},keys:{}};
+  const done=()=>{PL=n;SS('plc',JSON.stringify(n))};
   try{
+    let me=null; try{me=(await api('/me')).id}catch{}
     const lists=[];
-    for(let o=0;o<300;o+=50){const r=await api(`/me/playlists?limit=50&offset=${o}`);lists.push(...r.items.filter(Boolean));if(r.items.length<50)break}
-    let i=0;
-    const work=async()=>{
-      while(i<lists.length){
-        const p=lists[i++], pi=n.names.push(p.name)-1;
-        for(let pg=0,off=0;pg<15;pg++,off+=100){
-          let r;
-          try{r=await api(`/playlists/${p.id}/items?limit=100&offset=${off}`)}
-          catch{try{r=await api(`/playlists/${p.id}/tracks?limit=100&offset=${off}`)}catch{break}}
-          for(const it of r.items||[]){
-            const x=it&&(it.item||it.track); if(!x||!x.id) continue;
-            n.ids[x.id]=pi; (x.artists||[]).forEach(a=>{n.keys[low(a.name)+'|'+low(x.name)]=pi});
-          }
-          if(!r.next) break;
+    for(let o=0;o<300;o+=50){const r=await api(`/me/playlists?limit=50&offset=${o}`);lists.push(...r.items.filter(Boolean));if(r.items.length<50)break;await sleep(150)}
+    for(const p of lists){
+      if(me&&!p.collaborative&&p.owner&&p.owner.id!==me) continue; /* чужие плейлисты Spotify всё равно не отдаёт */
+      if(((p.items||p.tracks||{}).total)===0) continue;
+      const pi=n.names.push(p.name)-1;
+      for(let pg=0,off=0;pg<15;pg++,off+=100){
+        let r;
+        try{r=await api(`/playlists/${p.id}/items?limit=100&offset=${off}`)}
+        catch(e){
+          if(String(e.message)==='429') throw e;
+          try{r=await api(`/playlists/${p.id}/tracks?limit=100&offset=${off}`)}
+          catch(e2){if(String(e2.message)==='429') throw e2; break}
         }
+        for(const it of r.items||[]){
+          const x=it&&(it.item||it.track); if(!x||!x.id) continue;
+          n.ids[x.id]=pi; (x.artists||[]).forEach(a=>{n.keys[low(a.name)+'|'+low(x.name)]=pi});
+        }
+        if(!r.next) break;
+        await sleep(150);
       }
-    };
-    await Promise.all([work(),work(),work()]);
-    PL=n; SS('plc',JSON.stringify(n));
+      await sleep(150);
+    }
+    done();
   }catch(e){
-    if(String(e.message)==='403') toast('Чтобы проверять плейлисты, нажмите «Выйти» и войдите заново');
+    const c=String(e.message);
+    if(c==='429'){n.partial=true;done();toast('Spotify временно ограничил запросы: проверка плейлистов неполная')}
+    else if(c==='403') toast('Чтобы проверять плейлисты, нажмите «Выйти» и войдите заново');
   }
 }
 const plName=t=>{const i=PL.ids[t.id]??PL.keys[low(t.main)+'|'+low(t.name)];return i===undefined?null:PL.names[i]};
@@ -313,25 +329,49 @@ function markSaved(t){
   PL.ids[t.id]=i; PL.keys[low(t.main)+'|'+low(t.name)]=i; SS('plc',JSON.stringify(PL));
 }
 
-/* ---------- История добавлений ---------- */
+/* ---------- История: все показанные треки ---------- */
+/* s: 0 — только показан, 1 — добавлен, 2 — свайп вправо, но уже был в плейлисте/библиотеке; нет поля — старая запись (был добавлен) */
 const hist=J('hist')||[];
-function addHist(t){
-  hist.push({id:t.id,n:t.name,a:t.artist,t:Date.now()});
-  if(hist.length>5000) hist.splice(0,hist.length-5000);
-  SS('hist',JSON.stringify(hist));
+const histMap=new Map(hist.map(h=>[h.id,h]));
+function saveHist(){
+  try{SS('hist',JSON.stringify(hist))}
+  catch{ hist.splice(0,Math.ceil(hist.length*.2)); histMap.clear(); hist.forEach(h=>histMap.set(h.id,h)); try{SS('hist',JSON.stringify(hist))}catch{} }
 }
+function addSeen(t){
+  if(!t||!t.id||histMap.has(t.id)) return;
+  const e={id:t.id,n:t.name,a:t.artist,t:Date.now(),s:0};
+  hist.push(e); histMap.set(t.id,e);
+  if(hist.length>15000){ const d=hist.splice(0,hist.length-15000); d.forEach(x=>histMap.delete(x.id)) }
+  saveHist();
+}
+function markHist(t,s){
+  const e=histMap.get(t.id); if(!e||e.s===1||e.s===s) return;
+  e.s=s; saveHist();
+}
+function dropSeen(t){ /* трек пропущен автоматически (нет превью), пользователь его не видел */
+  const e=histMap.get(t.id); if(!e||e.s!==0) return;
+  histMap.delete(t.id); const i=hist.lastIndexOf(e); if(i>=0) hist.splice(i,1); saveHist();
+}
+let histOnly=false;
 function showHist(){
   const L=$('#hlist'); L.textContent='';
-  $('#histT').textContent='История · '+hist.length;
-  if(!hist.length){const p=document.createElement('p');p.className='hempty';p.textContent='Пока пусто. Треки появятся здесь после первого добавления.';L.append(p)}
-  for(const h of [...hist].reverse()){
+  const list=hist.filter(h=>!histOnly||(h.s??1)!==0);
+  $('#histT').textContent='История · '+list.length;
+  $('#hAll').classList.toggle('on',!histOnly); $('#hAdded').classList.toggle('on',histOnly);
+  if(!list.length){const p=document.createElement('p');p.className='hempty';p.textContent=histOnly?'Добавленных пока нет.':'Пока пусто. Здесь появятся все треки, которые вы увидите.';L.append(p)}
+  const fmt=d=>new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+  for(const h of [...list].reverse()){
     const a=document.createElement('a');a.className='hi';a.href='https://open.spotify.com/track/'+encodeURIComponent(h.id);a.target='_blank';a.rel='noopener';
     const b=document.createElement('b');b.textContent=h.n;
-    const s=document.createElement('span');s.textContent=h.a+' · '+new Date(h.t).toLocaleDateString('ru-RU');
+    const s=document.createElement('span');
+    const st=h.s??1;
+    s.textContent=h.a+' · '+fmt(h.t)+(st===1?' · ♥ добавлен':st===2?' · ♥ уже был в плейлисте':'');
     a.append(b,s);L.append(a);
   }
   $('#hist').classList.remove('hide');
 }
+$('#hAll').onclick=()=>{histOnly=false;showHist()};
+$('#hAdded').onclick=()=>{histOnly=true;showHist()};
 const closeHist=()=>$('#hist').classList.add('hide');
 $('#histBtn').onclick=showHist;$('#histX').onclick=closeHist;
 $('#hist').onclick=e=>{if(e.target===$('#hist'))closeHist()};
@@ -487,7 +527,7 @@ async function next(advance=true){
   if(!cur){$('#name').textContent='Ищем музыку…';$('#artist').textContent='';$('#via').textContent='';return}
   $('#art').src=cur.img||'';$('#bgart').style.backgroundImage=cur.img?`url(${cur.img})`:'none';
   $('#name').textContent=cur.name;$('#artist').textContent=cur.artist;$('#via').textContent=have(cur)||('Похож на: '+cur.via);
-  seen.add(cur.key);SS('seen',JSON.stringify([...seen].slice(-3000)));
+  seen.add(cur.key);SS('seen',JSON.stringify([...seen].slice(-3000)));addSeen(cur);
   await playCur();
 }
 const usePrev=()=>FD.preview||mode==='preview';
@@ -521,7 +561,7 @@ async function playCur(){
     if(cur!==t) return;
     if(t.pv==='none'){
       if(++miss>5){toast('Превью не находятся. Проверьте интернет.');return}
-      toast('Превью не найдено, берём следующий трек'); return next();
+      toast('Превью не найдено, берём следующий трек'); dropSeen(t); return next();
     }
     miss=0; aud.src=t.pv; aud.play().catch(()=>toast('Нажмите ▶, чтобы начать')); $('#pp').textContent='❚❚'; setMedia(t);
     return;
@@ -580,8 +620,8 @@ async function decide(yes){
     if(!liked.includes(t.main)){liked.push(t.main);SS('liked',JSON.stringify(liked));seeds.push({name:t.main,w:3})}
     likedT.push({artist:t.main,name:t.name});SS('lt',JSON.stringify(likedT.slice(-50)));bump(t.via,1.25);
     const dup=have(t);
-    if(dup) toast(dup+': '+t.name);
-    else save(t).then(()=>{addHist(t);markSaved(t);toast('Добавлено: '+t.name)}).catch(e=>toast('Не удалось сохранить ('+e.message+')'));
+    if(dup){markHist(t,2);toast(dup+': '+t.name)}
+    else save(t).then(()=>{markHist(t,1);markSaved(t);toast('Добавлено: '+t.name)}).catch(e=>toast('Не удалось сохранить ('+e.message+')'));
   }else{bump(t.via,.85);const k=low(t.main);skips[k]=(skips[k]||0)+1;SS('skips',JSON.stringify(skips))}
   played.push({t,act:yes?'yes':'no'}); if(played.length>30) played.shift(); updBack();
   await new Promise(r=>setTimeout(r,250));
