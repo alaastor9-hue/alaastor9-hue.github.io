@@ -45,6 +45,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--yes);outline-of
 .row{display:flex;gap:14px;align-items:center}
 .row button{width:64px;height:64px;padding:0;font-size:26px;background:var(--card);border:2px solid}
 #no{color:var(--no);border-color:var(--no)}#yes{color:var(--yes);border-color:var(--yes)}
+#star{color:#f5c542;border-color:#f5c542}
+#yes.off{color:var(--mute);border-color:var(--line);opacity:.55}
 #pp{width:44px!important;height:44px!important;font-size:16px!important;color:var(--ink)!important;border-color:var(--line)!important}
 #hint{font-size:13px;color:var(--mute);margin:0}
 .row2{display:flex;gap:10px}
@@ -60,7 +62,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--yes);outline-of
 .hi b{display:block;font-weight:600}
 .hi span{font-size:13px;color:var(--mute)}
 .hempty{color:var(--mute);padding:16px 0}
-.hfilt{display:flex;gap:8px;padding:10px 18px 0}
+.hfilt{display:flex;flex-wrap:wrap;gap:8px;padding:10px 18px 0}
 .pill.on{border-color:var(--yes);color:var(--yes)}
 #count{position:fixed;top:calc(18px + var(--st));left:50%;transform:translateX(-50%);font-size:14px;color:var(--mute)}
 #reset,#menuBtn{position:fixed;top:calc(10px + var(--st));z-index:6;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:999px;font-weight:500;font-size:14px;padding:8px 18px}
@@ -127,13 +129,14 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
     <div class="row">
       <button id="no" aria-label="Пропустить">✕</button>
       <button id="pp" aria-label="Пауза">❚❚</button>
+      <button id="star" aria-label="В избранное (без Spotify)">★</button>
       <button id="yes" aria-label="В плейлист">♥</button>
     </div>
     <div class="row2">
       <button id="back" class="pill" aria-label="Предыдущий трек" disabled>↶ Назад</button>
       <button id="histBtn" class="pill">История</button>
     </div>
-    <p id="hint">← пропустить · → в плейлист · пробел — пауза</p>
+    <p id="hint">← пропустить · → в плейлист · ↑ в ★ · ↓ назад · пробел — пауза</p>
   </section>
 <div id="side" class="hide">
 <details id="finder" open>
@@ -173,7 +176,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 <button id="reset" class="hide">Выйти</button>
 <div id="vol" class="hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg><input type="range" id="volR" min="0" max="100" aria-label="Громкость"></div>
 <div id="hist" class="hide" role="dialog" aria-modal="true" aria-labelledby="histT">
-  <div class="hbox"><div class="hhead"><h2 id="histT">История</h2><button id="histX" class="pill" aria-label="Закрыть">✕</button></div><div class="hfilt"><button id="hAll" class="pill on">Все</button><button id="hAdded" class="pill">Добавленные</button></div><div id="hlist"></div></div>
+  <div class="hbox"><div class="hhead"><h2 id="histT">История</h2><button id="histX" class="pill" aria-label="Закрыть">✕</button></div><div class="hfilt"><button id="hAll" class="pill on">Все</button><button id="hAdded" class="pill">Добавленные</button><button id="hFav" class="pill">★ Избранное</button></div><div id="hlist"></div></div>
 </div>
 <div id="toast" role="status"></div>
 
@@ -220,13 +223,29 @@ async function getToken(){
   if(Date.now()>+LS('exp')) await tokenReq({grant_type:'refresh_token',refresh_token:LS('rt'),client_id:CID()});
   return LS('at');
 }
+/* ---------- Лимит запросов Spotify ---------- */
+let limitUntil=+LS('lim')||0;
+const isLimited=()=>Date.now()<limitUntil;
+function updateLike(){
+  const l=isLimited(),y=$('#yes');
+  y.classList.toggle('off',l); y.setAttribute('aria-disabled',l?'true':'false'); y.title=l?'Spotify ограничил запросы, используйте ★':'';
+}
+function setLimited(sec){
+  sec=Math.min(sec,86400); limitUntil=Date.now()+sec*1000; SS('lim',String(limitUntil));
+  updateLike(); setTimeout(updateLike,sec*1000+200);
+}
+function clearLimited(){ if(!limitUntil) return; limitUntil=0; localStorage.removeItem('lim'); updateLike() }
+updateLike(); if(isLimited()) setTimeout(updateLike,limitUntil-Date.now()+200);
 async function api(path,o={},tries=0){
   const r=await fetch('https://api.spotify.com/v1'+path,{...o,headers:{Authorization:'Bearer '+await getToken(),'Content-Type':'application/json'}});
-  if(r.status===429&&tries<3){ /* лимит запросов: ждём и повторяем */
-    const w=Math.min(+r.headers.get('Retry-After')||2*(tries+1),15);
-    await new Promise(x=>setTimeout(x,w*1000+200));
-    return api(path,o,tries+1);
-  }
+  if(r.status===429){ /* лимит запросов: серая кнопка ♥, ждём и повторяем */
+    const ra=+r.headers.get('Retry-After')||0;
+    setLimited(ra||30);
+    if(tries<3){
+      await new Promise(x=>setTimeout(x,Math.min(ra||2*(tries+1),15)*1000+200));
+      return api(path,o,tries+1);
+    }
+  }else if(r.ok&&tries>0) clearLimited();
   if(!r.ok) throw new Error(r.status);
   return r.status===204?null:r.json();
 }
@@ -335,43 +354,53 @@ const hist=J('hist')||[];
 const histMap=new Map(hist.map(h=>[h.id,h]));
 function saveHist(){
   try{SS('hist',JSON.stringify(hist))}
-  catch{ hist.splice(0,Math.ceil(hist.length*.2)); histMap.clear(); hist.forEach(h=>histMap.set(h.id,h)); try{SS('hist',JSON.stringify(hist))}catch{} }
+  catch{ trimHist(Math.ceil(hist.length*.2)); try{SS('hist',JSON.stringify(hist))}catch{} }
+}
+function trimHist(n){ /* убрать n самых старых записей; избранное (f) не трогаем */
+  for(let i=0;i<hist.length&&n>0;){ if(hist[i].f){i++;continue} histMap.delete(hist[i].id); hist.splice(i,1); n-- }
 }
 function addSeen(t){
   if(!t||!t.id||histMap.has(t.id)) return;
   const e={id:t.id,n:t.name,a:t.artist,t:Date.now(),s:0};
   hist.push(e); histMap.set(t.id,e);
-  if(hist.length>15000){ const d=hist.splice(0,hist.length-15000); d.forEach(x=>histMap.delete(x.id)) }
+  if(hist.length>15000) trimHist(hist.length-15000);
   saveHist();
 }
 function markHist(t,s){
   const e=histMap.get(t.id); if(!e||e.s===1||e.s===s) return;
   e.s=s; saveHist();
 }
+function markFav(t){
+  const e=histMap.get(t.id); if(!e||e.f) return;
+  e.f=1; saveHist();
+}
 function dropSeen(t){ /* трек пропущен автоматически (нет превью), пользователь его не видел */
   const e=histMap.get(t.id); if(!e||e.s!==0) return;
   histMap.delete(t.id); const i=hist.lastIndexOf(e); if(i>=0) hist.splice(i,1); saveHist();
 }
-let histOnly=false;
+let histMode='all';
 function showHist(){
   const L=$('#hlist'); L.textContent='';
-  const list=hist.filter(h=>!histOnly||(h.s??1)!==0);
+  const list=hist.filter(h=>histMode==='all'||(histMode==='fav'?!!h.f:(h.s??1)!==0));
   $('#histT').textContent='История · '+list.length;
-  $('#hAll').classList.toggle('on',!histOnly); $('#hAdded').classList.toggle('on',histOnly);
-  if(!list.length){const p=document.createElement('p');p.className='hempty';p.textContent=histOnly?'Добавленных пока нет.':'Пока пусто. Здесь появятся все треки, которые вы увидите.';L.append(p)}
+  $('#hAll').classList.toggle('on',histMode==='all'); $('#hAdded').classList.toggle('on',histMode==='added'); $('#hFav').classList.toggle('on',histMode==='fav');
+  if(!list.length){const p=document.createElement('p');p.className='hempty';p.textContent=histMode==='fav'?'В избранном пока пусто. Нажмите ★ на карточке.':histMode==='added'?'Добавленных пока нет.':'Пока пусто. Здесь появятся все треки, которые вы увидите.';L.append(p)}
   const fmt=d=>new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
   for(const h of [...list].reverse()){
     const a=document.createElement('a');a.className='hi';a.href='https://open.spotify.com/track/'+encodeURIComponent(h.id);a.target='_blank';a.rel='noopener';
     const b=document.createElement('b');b.textContent=h.n;
     const s=document.createElement('span');
-    const st=h.s??1;
-    s.textContent=h.a+' · '+fmt(h.t)+(st===1?' · ♥ добавлен':st===2?' · ♥ уже был в плейлисте':'');
+    const st=h.s??1, tags=[];
+    if(st===1) tags.push('♥ добавлен'); else if(st===2) tags.push('♥ уже был в плейлисте');
+    if(h.f) tags.push('★ в избранном');
+    s.textContent=[h.a,fmt(h.t),...tags].join(' · ');
     a.append(b,s);L.append(a);
   }
   $('#hist').classList.remove('hide');
 }
-$('#hAll').onclick=()=>{histOnly=false;showHist()};
-$('#hAdded').onclick=()=>{histOnly=true;showHist()};
+$('#hAll').onclick=()=>{histMode='all';showHist()};
+$('#hAdded').onclick=()=>{histMode='added';showHist()};
+$('#hFav').onclick=()=>{histMode='fav';showHist()};
 const closeHist=()=>$('#hist').classList.add('hide');
 $('#histBtn').onclick=showHist;$('#histX').onclick=closeHist;
 $('#hist').onclick=e=>{if(e.target===$('#hist'))closeHist()};
@@ -611,29 +640,41 @@ async function goBack(){
   await next(false); locked=false;
 }
 $('#back').onclick=goBack;
-async function decide(yes){
-  if(locked||!cur) return; locked=true;
+async function decide(yes,local=false){
+  if(locked||!cur) return;
+  if(yes&&!local&&isLimited()){ /* ♥ серая: возвращаем карточку на место */
+    const c=$('#card');c.style.transition='transform .2s';c.style.transform='';c.style.opacity=1;$('#stamp').style.opacity=0;
+    toast('Spotify ограничил запросы. Нажмите ★: трек сохранится в избранное'); return;
+  }
+  locked=true;
   const t=cur, c=$('#card');
   c.style.transition='transform .25s,opacity .25s';
-  c.style.transform=`translateX(${yes?600:-600}px) rotate(${yes?18:-18}deg)`;c.style.opacity=0;
+  c.style.transform=local?'translateY(-600px)':`translateX(${yes?600:-600}px) rotate(${yes?18:-18}deg)`;c.style.opacity=0;
   if(yes){
     if(!liked.includes(t.main)){liked.push(t.main);SS('liked',JSON.stringify(liked));seeds.push({name:t.main,w:3})}
     likedT.push({artist:t.main,name:t.name});SS('lt',JSON.stringify(likedT.slice(-50)));bump(t.via,1.25);
-    const dup=have(t);
-    if(dup){markHist(t,2);toast(dup+': '+t.name)}
-    else save(t).then(()=>{markHist(t,1);markSaved(t);toast('Добавлено: '+t.name)}).catch(e=>toast('Не удалось сохранить ('+e.message+')'));
+    if(local){markFav(t);toast('★ В избранное: '+t.name)}
+    else{
+      const dup=have(t);
+      if(dup){markHist(t,2);toast(dup+': '+t.name)}
+      else save(t).then(()=>{markHist(t,1);markSaved(t);toast('Добавлено: '+t.name)})
+        .catch(e=>{
+          if(String(e.message)==='429'){markFav(t);toast('Spotify ограничил запросы, трек сохранён в ★')} /* не теряем трек */
+          else toast('Не удалось сохранить ('+e.message+')');
+        });
+    }
   }else{bump(t.via,.85);const k=low(t.main);skips[k]=(skips[k]||0)+1;SS('skips',JSON.stringify(skips))}
   played.push({t,act:yes?'yes':'no'}); if(played.length>30) played.shift(); updBack();
   await new Promise(r=>setTimeout(r,250));
   c.style.transition='none';c.style.transform='';c.style.opacity=1;$('#stamp').style.opacity=0;
   await next(); locked=false;
 }
-$('#yes').onclick=()=>decide(true);$('#no').onclick=()=>decide(false);
+$('#yes').onclick=()=>decide(true);$('#no').onclick=()=>decide(false);$('#star').onclick=()=>decide(true,true);
 $('#pp').onclick=async()=>{if(usePrev()){aud.paused?aud.play():aud.pause();$('#pp').textContent=aud.paused?'▶':'❚❚';return}await player.togglePlay();const s=await player.getCurrentState();$('#pp').textContent=s&&s.paused?'▶':'❚❚'};
 addEventListener('keydown',e=>{
   if($('#stage').classList.contains('hide')||/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
   if(!$('#hist').classList.contains('hide')) return;
-  if(e.key==='ArrowDown') goBack(); else if(e.key==='ArrowRight') decide(true); else if(e.key==='ArrowLeft') decide(false);
+  if(e.key==='ArrowDown') goBack(); else if(e.key==='ArrowUp') decide(true,true); else if(e.key==='ArrowRight') decide(true); else if(e.key==='ArrowLeft') decide(false);
   else if(e.key===' '){e.preventDefault();$('#pp').click()}
 });
 /* перетаскивание карточки */
@@ -672,7 +713,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
 
 /* PWA */
 if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-if(matchMedia('(pointer:coarse)').matches) $('#hint').textContent='Свайп влево — пропустить, вправо — в плейлист';
+if(matchMedia('(pointer:coarse)').matches) $('#hint').textContent='Влево — пропустить, вправо — в плейлист, ★ — в избранное';
 
 /* ---------- Запуск ---------- */
 (async()=>{
