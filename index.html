@@ -7,10 +7,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Свайп-радио">
+<meta name="apple-mobile-web-app-title" content="Swipe Music">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Свайп-радио</title>
+<title>Swipe Music</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%231c1427'/%3E%3Ccircle%20cx='26'%20cy='44'%20r='8'%20fill='%236ee7b0'/%3E%3Cpath%20d='M33%2044V16l16%206'%20fill='none'%20stroke='%23f4eefb'%20stroke-width='5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--bg:#1c1427;--ink:#f4eefb;--mute:#b3a6c4;--line:#3a2d4d;--yes:#6ee7b0;--no:#ff7088;--card:#2a1f3a}
@@ -100,12 +100,10 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 <div id="bgart"></div>
 <main>
   <section id="setup" class="panel hide">
-    <h1>Свайп-радио</h1>
+    <h1>Swipe Music</h1>
     <p id="setupHelp">Откройте приложение по адресу <code id="origin"></code> и добавьте в Spotify Dashboard такой Redirect URI: <code id="ruri"></code></p>
     <label for="cid">Spotify Client ID</label>
     <input id="cid" autocomplete="off">
-    <label for="lfm">Last.fm API key</label>
-    <input id="lfm" autocomplete="off">
     <p id="setupNote" style="margin-top:12px;font-size:13px">Ключи хранятся только в этом браузере. Нужен Spotify Premium.</p>
     <button id="login">Войти через Spotify</button>
   </section>
@@ -114,7 +112,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 
   <section id="ready" class="panel hide">
     <h1>Всё готово</h1>
-    <p>Подберём треки, похожие на ваших любимых артистов. Вправо — в плейлист «Свайп-радио», влево — пропустить.</p>
+    <p>Подберём треки, похожие на ваших любимых артистов. Вправо — в плейлист «Swipe Music», влево — пропустить.</p>
     <p id="rnote" style="font-size:14px"></p>
     <button id="go">Начать</button>
   </section>
@@ -144,10 +142,6 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
   <label for="sArtist">Похожие на исполнителя</label>
   <input id="sArtist" placeholder="Например, Radiohead" autocomplete="off">
   <button id="sArtistGo" class="mini">Искать</button>
-  <label for="tArtist">Похожие на трек</label>
-  <input id="tArtist" placeholder="Исполнитель" autocomplete="off">
-  <input id="tName" placeholder="Название трека" autocomplete="off" style="margin-top:6px">
-  <button id="sTrackGo" class="mini">Искать</button>
   <div id="fbar" class="hide"><span id="ftxt"></span><br><button id="fReset" class="mini">Вернуться к общим рекомендациям</button></div>
 </details>
 <details id="filters" open>
@@ -164,7 +158,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
   <select id="fPop"><option value="any">Любые</option><option value="hits">Хиты артиста</option><option value="deep">Менее известные</option></select>
   <label class="chk"><input type="checkbox" id="fClean"> Без пометки explicit</label>
   <label for="fSave">Куда сохранять</label>
-  <select id="fSave"><option value="pl">В плейлист «Свайп-радио»</option><option value="lib">В «Любимые треки»</option></select>
+  <select id="fSave"><option value="pl">В плейлист «Swipe Music»</option><option value="lib">В «Любимые треки»</option></select>
   <label>Жанры: клик — нужен, ещё клик — исключить</label>
   <div id="chips"></div>
   <details id="allg"><summary>Все жанры</summary><input id="gq" placeholder="Найти жанр или ввести свой" autocomplete="off" style="margin-top:8px"><div id="gbox"></div></details>
@@ -183,7 +177,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 <script>
 const $=s=>document.querySelector(s), LS=k=>localStorage.getItem(k), SS=(k,v)=>localStorage.setItem(k,v);
 /* ВАЖНО: вставьте сюда Client ID вашего Spotify-приложения. Он не секретный (используется PKCE). */
-const CONFIG={lastfm:'ec9dd8f7031429825cbe5e6f37c0e7d3',spotifyClientId:'aa5cb0f3528e43b78c3c20700fc4d77d'};
+const CONFIG={spotifyClientId:'aa5cb0f3528e43b78c3c20700fc4d77d'};
 const CID=()=>CONFIG.spotifyClientId||LS('cid');
 const REDIRECT=location.origin+location.pathname;
 const SCOPES='streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-top-read user-library-read user-library-modify playlist-modify-private playlist-read-private playlist-read-collaborative';
@@ -201,14 +195,13 @@ const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').
 
 /* ---------- Spotify auth (PKCE) ---------- */
 $('#origin').textContent=location.origin; $('#ruri').textContent=REDIRECT;
-$('#cid').value=CONFIG.spotifyClientId||LS('cid')||''; $('#lfm').value=CONFIG.lastfm||LS('lfm')||'';
+$('#cid').value=CONFIG.spotifyClientId||LS('cid')||'';
 if(CONFIG.spotifyClientId)['#cid','label[for=cid]'].forEach(q=>$(q).classList.add('hide'));
-if(CONFIG.lastfm)['#lfm','label[for=lfm]'].forEach(q=>$(q).classList.add('hide'));
-if(CONFIG.spotifyClientId&&CONFIG.lastfm){$('#setupHelp').textContent='Войдите через Spotify (нужен Premium), и можно выбирать новые треки для своей библиотеки.';$('#setupNote').classList.add('hide')}
+if(CONFIG.spotifyClientId){$('#setupHelp').textContent='Войдите через Spotify (нужен Premium), и можно выбирать новые треки для своей библиотеки.';$('#setupNote').classList.add('hide')}
 $('#login').onclick=async()=>{
-  const cid=$('#cid').value.trim(), key=$('#lfm').value.trim();
-  if(!cid||!key) return toast('Заполните оба поля');
-  SS('cid',cid);SS('lfm',key);
+  const cid=$('#cid').value.trim();
+  if(!cid) return toast('Укажите Client ID');
+  SS('cid',cid);
   const v=Array.from(crypto.getRandomValues(new Uint8Array(64)),n=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[n%62]).join('');
   SS('verifier',v);
   const ch=b64(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
@@ -256,7 +249,7 @@ function initPlayer(){
   if(MOBILE) return noSdk('На телефоне плеер Spotify недоступен, поэтому играют 30-секундные превью.');
   view('loading');
   window.onSpotifyWebPlaybackSDKReady=()=>{
-    player=new Spotify.Player({name:'Свайп-радио',getOAuthToken:cb=>getToken().then(cb),volume:vol/100});
+    player=new Spotify.Player({name:'Swipe Music',getOAuthToken:cb=>getToken().then(cb),volume:vol/100});
     player.addListener('ready',({device_id})=>{dev=device_id;if(!sdkBad)view('ready')});
     player.addListener('initialization_error',()=>noSdk('Защищённое воспроизведение недоступно в этом браузере, поэтому будут играть 30-секундные превью.'));
     player.addListener('authentication_error',()=>{$('#lmsg').textContent='Ошибка входа. Нажмите «Выйти» и войдите снова.'});
@@ -271,7 +264,7 @@ Object.assign(FD,J('flt')||{});
 const REACH=[[0,12],[8,28],[20,50]];
 const ERA={any:[0,9999],'<1990':[0,1989],'1990s':[1990,1999],'2000s':[2000,2009],'2010s':[2010,2019],'2020+':[2020,9999]};
 const BAD=new Set(['seen live','favorites','favourites','favorite','albums i own','all','awesome']);
-const sw=J('sw')||{}, likedT=J('lt')||[], tagCache={};
+const sw=J('sw')||{}, tagCache={};
 let libArtists=new Set(), libIds=new Set(), mine=new Set();
 const low=s=>s.toLowerCase();
 const bump=(n,f)=>{sw[n]=Math.max(.2,Math.min(3,(sw[n]||1)*f));SS('sw',JSON.stringify(sw))};
@@ -292,7 +285,8 @@ $('#go').onclick=async()=>{
   if(!seeds.length) return toast('В вашем профиле пока нет топ-артистов. Послушайте музыку и вернитесь.');
   $('#name').textContent='Ищем музыку…';
   const plP=loadPlaylists();
-  await Promise.all([loadLibrary(),buildChips()]);
+  buildChips();
+  await loadLibrary();
   await Promise.race([plP,new Promise(r=>setTimeout(r,4000))]);
   await next(false);
 };
@@ -344,7 +338,7 @@ function have(t){
 }
 function markSaved(t){
   if(FD.save==='lib') return;
-  let i=PL.names.indexOf('Свайп-радио'); if(i<0) i=PL.names.push('Свайп-радио')-1;
+  let i=PL.names.indexOf('Swipe Music'); if(i<0) i=PL.names.indexOf('Свайп-радио'); if(i<0) i=PL.names.push('Swipe Music')-1;
   PL.ids[t.id]=i; PL.keys[low(t.main)+'|'+low(t.name)]=i; SS('plc',JSON.stringify(PL));
 }
 
@@ -415,15 +409,90 @@ async function loadLibrary(){
     }
   }catch(e){toast('Библиотеку прочитать не удалось, возможны повторы знакомой музыки')}
 }
-async function lfm(method,p){
-  const r=await fetch('https://ws.audioscrobbler.com/2.0/?'+new URLSearchParams({method,api_key:CONFIG.lastfm||LS('lfm'),format:'json',...p}));
-  if(!r.ok) throw new Error('lastfm '+r.status);
-  return r.json();
+/* ---------- Музыкальные данные без сервера: Deezer (JSONP) и MusicBrainz ---------- */
+let dzChain=Promise.resolve();
+const dzGate=()=>{const p=dzChain.then(()=>sleep(110));dzChain=p;return p}; /* Deezer: не чаще ~9 запросов в секунду */
+async function dzGet(u){
+  for(let attempt=0;attempt<2;attempt++){
+    await dzGate();
+    const d=await jsonp(u);
+    if(d&&d.error){ if(d.error.code===4&&attempt===0){await sleep(1500);continue} throw new Error('deezer') }
+    return d;
+  }
+  throw new Error('deezer quota');
+}
+const dzArtistCache=new Map();
+async function dzFindArtist(name){
+  const k=low(name); if(dzArtistCache.has(k)) return dzArtistCache.get(k);
+  let r=null;
+  try{
+    const d=await dzGet('https://api.deezer.com/search/artist?limit=5&q='+encodeURIComponent(name));
+    const l=d.data||[]; if(l.length) r=l.find(x=>low(x.name)===k)||l[0];
+  }catch{return null}
+  dzArtistCache.set(k,r); return r;
+}
+const dzRelated=async id=>{try{return (await dzGet(`https://api.deezer.com/artist/${id}/related?limit=50`)).data||[]}catch{return []}};
+const simMem=new Map(), topMem=new Map();
+async function dzSimilar(name){
+  name=name.trim(); const k=low(name); if(!k) return [];
+  if(simMem.has(k)) return simMem.get(k);
+  const a=await dzFindArtist(name); if(!a) return [];
+  const seenA=new Set([k,low(a.name)]), l1=[];
+  for(const x of await dzRelated(a.id)){const n=low(x.name);if(!seenA.has(n)){seenA.add(n);l1.push(x)}}
+  let out=l1.map((x,i)=>({name:x.name,match:1-.5*i/l1.length}));
+  if(l1.length>0&&l1.length<45){
+    const l2=[];
+    for(let i=0;i<l1.length&&i<6;i++) for(const x of await dzRelated(l1[i].id)){const n=low(x.name);if(!seenA.has(n)){seenA.add(n);l2.push({name:x.name})}}
+    l2.forEach((x,j)=>{x.match=.45-.3*j/l2.length});
+    out=out.concat(l2);
+  }
+  out=out.slice(0,60); if(out.length) simMem.set(k,out); return out;
+}
+async function dzTop(name){
+  name=name.trim(); const k=low(name); if(!k) return [];
+  if(topMem.has(k)) return topMem.get(k);
+  const a=await dzFindArtist(name); if(!a) return [];
+  try{
+    const out=((await dzGet(`https://api.deezer.com/artist/${a.id}/top?limit=25`)).data||[]).map(x=>x.title).filter(Boolean);
+    if(out.length) topMem.set(k,out); return out;
+  }catch{return []}
+}
+/* MusicBrainz: не чаще 1 запроса в секунду; жанры кэшируются в браузере */
+let mbChain=Promise.resolve();
+const mbGate=()=>{const p=mbChain.then(()=>sleep(1100));mbChain=p;return p};
+const mbJSON=async u=>{await mbGate();const r=await fetch(u,{headers:{Accept:'application/json'}});if(!r.ok) throw new Error(r.status);return r.json()};
+const mbSaved=J('tgc')||{};
+async function mbTags(name){
+  name=name.trim(); const k=low(name); if(!k) return [];
+  if(mbSaved[k]) return mbSaved[k];
+  let out=[];
+  try{
+    const d=await mbJSON('https://musicbrainz.org/ws/2/artist?fmt=json&limit=3&query='+encodeURIComponent('artist:"'+name.replace(/"/g,'')+'"'));
+    const arr=d.artists||[]; let a=arr.find(x=>low(x.name)===k)||(arr[0]&&arr[0].score>=95?arr[0]:null);
+    if(a){
+      let g=a.genres||[], t=a.tags||[];
+      if(!g.length&&!t.length&&a.id){try{const l=await mbJSON('https://musicbrainz.org/ws/2/artist/'+a.id+'?fmt=json&inc=genres+tags');g=l.genres||[];t=l.tags||[]}catch{}}
+      const by=l=>[...l].sort((x,y)=>(y.count||0)-(x.count||0)), seenT=new Set();
+      for(const x of [...by(g),...by(t)]){const n=low((x.name||'').trim());if(!n||n.length>30||seenT.has(n))continue;seenT.add(n);out.push(n);if(out.length>=8)break}
+    }
+  }catch{return []} /* сеть/лимит: не запоминаем, попробуем позже */
+  if(out.length){mbSaved[k]=out;const ks=Object.keys(mbSaved);if(ks.length>800) delete mbSaved[ks[0]];SS('tgc',JSON.stringify(mbSaved))}
+  return out;
 }
 async function tagsOf(name){
   if(tagCache[name]) return tagCache[name];
-  try{return tagCache[name]=((await lfm('artist.gettoptags',{artist:name})).toptags.tag||[]).slice(0,8).map(t=>low(t.name))}
+  try{return tagCache[name]=(await mbTags(name)).map(low)}
   catch{return tagCache[name]=[]}
+}
+const simCache={};
+async function simArtists(name){
+  if(simCache[name]) return simCache[name];
+  try{const l=await dzSimilar(name);if(l.length) simCache[name]=l;return l}
+  catch{return []}
+}
+async function topTracks(name){
+  try{return await dzTop(name)}
+  catch{return []}
 }
 const CAT=`Электроника:brostep,dubstep,riddim,drumstep,future bass,trap,edm,electro house,big room,house,deep house,tech house,progressive house,future house,tropical house,acid house,techno,minimal techno,trance,psytrance,progressive trance,drum and bass,liquid funk,neurofunk,jungle,breakbeat,big beat,hardstyle,hardcore,gabber,electro,electronica,idm,glitch,glitch hop,downtempo,trip-hop,chillout,lo-fi,ambient,dark ambient,drone,synthwave,retrowave,vaporwave,chillwave,future garage,uk garage,2-step,grime,moombahton,industrial,ebm,darkwave,witch house,future funk,hyperpop,nightcore,eurodance,italo disco
 Метал:metal,heavy metal,thrash metal,speed metal,power metal,death metal,melodic death metal,technical death metal,brutal death metal,black metal,symphonic black metal,atmospheric black metal,doom metal,funeral doom,sludge metal,stoner metal,gothic metal,symphonic metal,folk metal,viking metal,pagan metal,progressive metal,nu metal,alternative metal,groove metal,industrial metal,metalcore,deathcore,mathcore,djent,post-metal,glam metal,hair metal,neoclassical metal,melodic metal,rap metal,funk metal,grindcore,crust punk
@@ -456,14 +525,16 @@ function renderChips(){
 }
 $('#gq').oninput=renderChips;
 async function buildChips(){
-  let tags=J('tagsTop');
-  if(!tags){
-    const all=await Promise.all(seeds.slice(0,30).map(s=>tagsOf(s.name))), c={};
-    all.flat().forEach(t=>{if(!BAD.has(t)) c[t]=(c[t]||0)+1});
-    tags=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,16).map(x=>x[0]);
-    SS('tagsTop',JSON.stringify(tags));
+  const saved=J('tagsTop');
+  if(saved&&saved.length){myTags=saved;renderChips();return}
+  myTags=[];renderChips();
+  const c={};
+  for(const s of seeds.slice(0,12)){
+    (await tagsOf(s.name)).forEach(t=>{if(!BAD.has(t)) c[t]=(c[t]||0)+1});
+    myTags=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,16).map(x=>x[0]);
+    renderChips();
   }
-  myTags=tags; renderChips();
+  if(myTags.length) SS('tagsTop',JSON.stringify(myTags));
 }
 function applyF(){SS('flt',JSON.stringify(FD));gen++;queue=queue.slice(0,1);fill()}
 $('#fFresh').checked=FD.fresh; $('#fReach').value=FD.reach; $('#fEra').value=FD.era;
@@ -480,24 +551,17 @@ bind('fStrict','strict',Number);bind('fPop','pop');bind('fClean','clean');bind('
 let gen=0, focus=null;
 const JUNK=/karaoke|tribute|8-bit|lullaby|made famous|originally performed|cover version|instrumental|piano version|string quartet|rendition/i;
 const VER=/\b(live|remix|acoustic|demo|session|edit|version)\b/i;
-const simTrack=async(artist,track,via)=>{
-  const l=((await lfm('track.getsimilar',{artist,track,limit:50,autocorrect:1})).similartracks||{}).track||[];
-  if(!l.length) return null;
-  const t=wpick(l,x=>.2+(+x.match||0));
-  return {artist:t.artist.name,name:t.name,via,match:+t.match||0};
-};
 async function candidate(){
   const [lo,hi]=REACH[FD.reach];
-  if(focus&&focus.track){const r=await simTrack(focus.artist,focus.track,focus.artist); if(r) return r}
-  if(!focus&&likedT.length&&Math.random()<.3){const l=pick(likedT); return simTrack(l.artist,l.name,l.artist)}
   const seed=focus?{name:focus.artist}:wpick(seeds,s=>s.w*(sw[s.name]??1));
-  const sim=(((await lfm('artist.getsimilar',{artist:seed.name,limit:50,autocorrect:1})).similarartists||{}).artist||[]).slice(focus?0:lo,hi);
+  const all=await simArtists(seed.name);
+  let sim=all.slice(focus?0:lo,hi); if(!sim.length) sim=all.slice(0,hi);
   if(!sim.length) return null;
-  const a=wpick(sim,x=>.2+(+x.match||0));
-  const tt=((await lfm('artist.gettoptracks',{artist:a.name,limit:15})).toptracks||{}).track||[];
+  const a=wpick(sim,x=>.2+x.match);
+  const tt=await topTracks(a.name);
   const pl=FD.pop==='hits'?tt.slice(0,5):FD.pop==='deep'?tt.slice(5,15):tt.slice(0,12);
   if(!pl.length) return null;
-  return {artist:a.name,name:wpick(pl.map((x,i)=>({x,i})),o=>1/(1+o.i*.3)).x.name,via:seed.name,match:+a.match||0};
+  return {artist:a.name,name:wpick(pl.map((x,i)=>({x,i})),o=>1/(1+o.i*.3)).x,via:seed.name,match:a.match};
 }
 async function fill(){
   if(busy) return; busy=true; const g=gen;
@@ -508,11 +572,10 @@ async function fill(){
       const an=low(c.artist), key=an+'|'+low(c.name), cn=low(c.name);
       if(seen.has(key)||(skips[an]||0)>=2||queue.some(q=>q.key===key)||c.match<MIN) continue;
       if(FD.fresh&&(mine.has(an)||libArtists.has(an))) continue;
-      if(FD.tags.length||FD.ban.length||FD.strict){
+      if(FD.tags.length||FD.ban.length){
         const tg=await tagsOf(c.artist);
         if(FD.tags.length&&!FD.tags.some(t=>hasTag(tg,t))) continue;
         if(FD.ban.some(t=>hasTag(tg,t))) continue;
-        if(FD.strict){const sd=await tagsOf(c.via); if(tg.filter(t=>!BAD.has(t)&&sd.includes(t)).length<FD.strict) continue}
       }
       const res=await api('/search?'+new URLSearchParams({q:`track:${c.name} artist:${c.artist}`,type:'track',limit:10}));
       const ok=(res.tracks.items||[]).filter(x=>x.artists.some(y=>low(y.name)===an)&&!libIds.has(x.id)&&!(FD.save!=='lib'&&plName({id:x.id,main:c.artist,name:x.name}))
@@ -532,21 +595,16 @@ async function fill(){
 /* ---------- Поиск по исполнителю / по треку ---------- */
 async function startFocus(f){
   focus=f; gen++; queue=[]; cur=null;
-  $('#ftxt').textContent='Сейчас: похожие на '+f.artist+(f.track?' — '+f.track:'');
+  $('#ftxt').textContent='Сейчас: похожие на '+f.artist;
   $('#fbar').classList.remove('hide'); await next(false);
 }
 $('#sArtistGo').onclick=async()=>{
   const q=$('#sArtist').value.trim(); if(!q) return;
-  try{const j=await lfm('artist.getinfo',{artist:q,autocorrect:1}); if(!j.artist) throw 0; await startFocus({artist:j.artist.name})}
+  try{const a=await dzFindArtist(q); if(!a) throw 0; await startFocus({artist:a.name})}
   catch{toast('Исполнитель не найден')}
 };
-$('#sTrackGo').onclick=async()=>{
-  const a=$('#tArtist').value.trim(), t=$('#tName').value.trim(); if(!a||!t) return toast('Укажите исполнителя и название трека');
-  try{const j=await lfm('track.getinfo',{artist:a,track:t,autocorrect:1}); if(!j.track) throw 0; await startFocus({artist:j.track.artist.name,track:j.track.name})}
-  catch{toast('Трек не найден')}
-};
 $('#fReset').onclick=()=>{focus=null;gen++;queue=[];cur=null;$('#fbar').classList.add('hide');next(false)};
-[['sArtist','sArtistGo'],['tArtist','sTrackGo'],['tName','sTrackGo']].forEach(([i,b])=>$('#'+i).addEventListener('keydown',e=>{if(e.key==='Enter')$('#'+b).click()}));
+[['sArtist','sArtistGo']].forEach(([i,b])=>$('#'+i).addEventListener('keydown',e=>{if(e.key==='Enter')$('#'+b).click()}));
 
 /* ---------- Карточка и воспроизведение ---------- */
 async function next(advance=true){
@@ -611,7 +669,7 @@ setInterval(async()=>{
 
 async function playlistId(){
   let id=LS('pl'); if(id) return id;
-  const p=await api('/me/playlists',{method:'POST',body:JSON.stringify({name:'Свайп-радио',public:false,description:'Найдено в приложении «Свайп-радио»'})});
+  const p=await api('/me/playlists',{method:'POST',body:JSON.stringify({name:'Swipe Music',public:false,description:'Найдено в приложении «Swipe Music»'})});
   SS('pl',p.id); return p.id;
 }
 async function save(t){
@@ -652,7 +710,7 @@ async function decide(yes,local=false){
   c.style.transform=local?'translateY(-600px)':`translateX(${yes?600:-600}px) rotate(${yes?18:-18}deg)`;c.style.opacity=0;
   if(yes){
     if(!liked.includes(t.main)){liked.push(t.main);SS('liked',JSON.stringify(liked));seeds.push({name:t.main,w:3})}
-    likedT.push({artist:t.main,name:t.name});SS('lt',JSON.stringify(likedT.slice(-50)));bump(t.via,1.25);
+    bump(t.via,1.25);
     if(local){markFav(t);toast('★ В избранное: '+t.name)}
     else{
       const dup=have(t);

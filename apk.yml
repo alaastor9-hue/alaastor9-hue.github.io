@@ -1,0 +1,198 @@
+name: Build APK
+
+# Запуск вручную: вкладка Actions → Build APK → Run workflow
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      PKG: app.swipemusic.radio
+      KS_FILE: ${{ github.workspace }}/android.keystore
+      KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+      RUN_NUMBER: ${{ github.run_number }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка секрета
+        run: |
+          if [ "${#KS_PASS}" -lt 12 ]; then
+            echo "::error::Создайте секрет KEYSTORE_PASSWORD (не короче 12 символов): Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Android SDK уже установлен на runner'е ubuntu-latest, отдельная установка не нужна
+      - name: Android SDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKM" ]; then
+            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+            "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          fi
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Ключ подписи и assetlinks.json
+        run: |
+          HOST="$(echo "$OWNER" | tr 'A-Z' 'a-z').github.io"
+          echo "HOST=$HOST" >> "$GITHUB_ENV"
+          if [ ! -f android.keystore ]; then
+            keytool -genkeypair -keystore android.keystore -storetype PKCS12 -alias swipemusic \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=SwipeMusic"
+          fi
+          FP="$(keytool -list -v -keystore android.keystore -storepass "$KS_PASS" | grep 'SHA256:' | head -1 | sed 's/.*SHA256: *//')"
+          echo "FP=$FP" >> "$GITHUB_ENV"
+          mkdir -p .well-known
+          touch .nojekyll
+          cat > .well-known/assetlinks.json <<EOF
+          [{
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+              "namespace": "android_app",
+              "package_name": "$PKG",
+              "sha256_cert_fingerprints": ["$FP"]
+            }
+          }]
+          EOF
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add android.keystore .well-known/assetlinks.json .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m "APK: ключ подписи и assetlinks.json"
+            git push
+          fi
+
+      - name: Android-проект
+        run: |
+          mkdir -p twa/app/src/main/res/{values,mipmap-xxxhdpi}
+          cp icon-512.png twa/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cd twa
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'swipemusic'
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.5.2' apply false }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g
+          EOF
+
+          cat > app/build.gradle <<EOF
+          plugins { id 'com.android.application' }
+          android {
+            namespace '$PKG'
+            compileSdk 34
+            defaultConfig {
+              applicationId '$PKG'
+              minSdk 21
+              targetSdk 34
+              versionCode $RUN_NUMBER
+              versionName '1.0.$RUN_NUMBER'
+            }
+            signingConfigs {
+              release {
+                storeFile file(System.getenv('KS_FILE'))
+                storePassword System.getenv('KS_PASS')
+                keyAlias 'swipemusic'
+                keyPassword System.getenv('KS_PASS')
+              }
+            }
+            buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+            compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+            lint { checkReleaseBuilds false; abortOnError false }
+          }
+          dependencies { implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0' }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<EOF
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:theme="@style/Theme.App"
+                android:allowBackup="true"
+                android:supportsRtl="true">
+              <activity
+                  android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+                  android:exported="true"
+                  android:launchMode="singleTop"
+                  android:screenOrientation="portrait"
+                  android:label="@string/app_name">
+                <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://$HOST/" />
+                <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/bg" />
+                <meta-data android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR" android:resource="@color/bg" />
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+                </intent-filter>
+                <intent-filter android:autoVerify="true">
+                  <action android:name="android.intent.action.VIEW" />
+                  <category android:name="android.intent.category.DEFAULT" />
+                  <category android:name="android.intent.category.BROWSABLE" />
+                  <data android:scheme="https" android:host="$HOST" />
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/strings.xml <<'EOF'
+          <resources><string name="app_name">Swipe Music</string></resources>
+          EOF
+
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources><color name="bg">#1c1427</color></resources>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+            <style name="Theme.App" parent="android:Theme.Material.Light.NoActionBar">
+              <item name="android:windowBackground">@color/bg</item>
+              <item name="android:statusBarColor">@color/bg</item>
+              <item name="android:navigationBarColor">@color/bg</item>
+            </style>
+          </resources>
+          EOF
+
+      - name: Сборка
+        working-directory: twa
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Публикация APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp twa/app/build/outputs/apk/release/app-release.apk swipemusic.apk
+          gh release create "apk-$RUN_NUMBER" swipemusic.apk \
+            --title "APK #$RUN_NUMBER" \
+            --notes "Пакет: $PKG. SHA-256 ключа: $FP"
+          {
+            echo "### Готово"
+            echo "Скачайте swipemusic.apk в разделе Releases."
+            echo "Проверьте, что открывается: https://$HOST/.well-known/assetlinks.json"
+          } >> "$GITHUB_STEP_SUMMARY"

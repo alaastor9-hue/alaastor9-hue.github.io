@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Свайп-радио",
-  "short_name": "Свайп-радио",
+  "name": "Swipe Music",
+  "short_name": "Swipe Music",
   "description": "Свайпайте новую музыку и сохраняйте понравившееся",
   "lang": "ru",
   "start_url": "./",
