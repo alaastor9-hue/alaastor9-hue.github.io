@@ -177,7 +177,7 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);bac
 <script>
 const $=s=>document.querySelector(s), LS=k=>localStorage.getItem(k), SS=(k,v)=>localStorage.setItem(k,v);
 /* ВАЖНО: вставьте сюда Client ID вашего Spotify-приложения. Он не секретный (используется PKCE). */
-const CONFIG={spotifyClientId:'aa5cb0f3528e43b78c3c20700fc4d77d'};
+const CONFIG={spotifyClientId:'91eca2d5493a4000bf8bfa57a1bb0d0a'};
 const CID=()=>CONFIG.spotifyClientId||LS('cid');
 const REDIRECT=location.origin+location.pathname;
 const SCOPES='streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-top-read user-library-read user-library-modify playlist-modify-private playlist-read-private playlist-read-collaborative';
